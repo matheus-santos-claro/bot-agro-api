@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: bot-agro-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.main
+    healthCheckPath: /ping
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+    scaling:
+      minInstances: 1
+      maxInstances: 3
