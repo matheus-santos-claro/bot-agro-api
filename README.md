@@ -37,7 +37,29 @@ API inteligente para consulta de manuais de máquinas agrícolas usando IA.
 
 ##    Exemplo de Uso
 
+## 🧪 **TESTE LOCAL COM NOVA CONFIGURAÇÃO**
+
+### **PASSO 5: Testar localmente**
+
+```bash
+cd Desktop\bot_agro_api
+
+# Configurar chave temporariamente
+set OPENAI_API_KEY=SUA_NOVA_CHAVE_AQUI
+
+# Testar servidor
+python -m app.main
+Deve aparecer:
+
+🚀 Iniciando servidor...
+💡 O processador será criado apenas na primeira pergunta
+🌐 Servidor rodará em: http://localhost:8000
+Se aparecer:
+
+⚠️ OPENAI_API_KEY não configurada!
+
 ```bash
 curl -X POST "https://sua-app.onrender.com/perguntar" \
      -H "Content-Type: application/json" \
+
      -d '{"pergunta": "Como fazer manutenção do motor John Deere?"}'
