@@ -128,3 +128,23 @@ if __name__ == "__main__":
         reload=False,          # False em produção
         log_level="info"
     )
+
+@app.get("/debug")
+async def debug_sistema():
+    """Endpoint para diagnóstico do sistema"""
+    from .config import config
+    
+    debug_info = {
+        "openai_key_configurada": bool(config.OPENAI_API_KEY),
+        "openai_key_preview": config.OPENAI_API_KEY[:15] + "..." if config.OPENAI_API_KEY else "Não configurada",
+        "processador_inicializado": processador_global is not None,
+        "caminho_manuais": config.CAMINHO_MANUAIS,
+        "manuais_existem": os.path.exists(config.CAMINHO_MANUAIS),
+    }
+    
+    if os.path.exists(config.CAMINHO_MANUAIS):
+        arquivos = [f for f in os.listdir(config.CAMINHO_MANUAIS) if f.endswith('.md')]
+        debug_info["total_manuais"] = len(arquivos)
+        debug_info["primeiros_manuais"] = arquivos[:5]
+    
+    return debug_info
