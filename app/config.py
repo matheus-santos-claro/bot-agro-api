@@ -2,12 +2,12 @@ import os
 
 class Config:
     def __init__(self):
-        # Chave OpenAI - SEMPRE usar vari·vel de ambiente
+        # Chave OpenAI - SEMPRE usar vari√°vel de ambiente
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
         
         if not self.OPENAI_API_KEY:
-            print("OPENAI_API_KEY n„o configurada!")
-            print("Configure a vari·vel de ambiente no Render")
+            print("OPENAI_API_KEY n√£o configurada!")
+            print("Configure a vari√°vel de ambiente no Render")
         
         # Caminho para os manuais
         self.CAMINHO_MANUAIS = os.path.join(
@@ -15,12 +15,12 @@ class Config:
             "manuais", "agro", "md"
         )
         
-        # ConfiguraÁıes da API
+        # Configura√ß√µes da API
         self.HOST = "0.0.0.0"
         self.PORT = int(os.getenv("PORT", 8000))
         self.DEBUG = False
 
-# Inst‚ncia global da configuraÁ„o
+# Inst√¢ncia global da configura√ß√£o
 config = Config()
 
 
