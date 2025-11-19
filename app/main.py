@@ -20,7 +20,7 @@ def get_processor():
     if processor is None:
         print("🔄 Criando processador pela primeira vez...")
         from .manual_processor import ManualProcessor
-        processor = ManualProcessor()
+        processor = ManualProcessor(config.CAMINHO_MANUAIS, config.OPENAI_API_KEY)
         print("✅ Processador criado!")
     return processor
 
@@ -148,3 +148,4 @@ async def debug_sistema():
         debug_info["primeiros_manuais"] = arquivos[:5]
     
     return debug_info
+
