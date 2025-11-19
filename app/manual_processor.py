@@ -47,6 +47,9 @@ class ManualProcessor:
             try:
                 with open(caminho_arquivo, 'r', encoding='utf-8') as f:
                     conteudo = f.read()
+                    # Limitar tamanho como no local
+                    if len(conteudo) > 15000:
+                        conteudo = conteudo[:15000] + "\n[...conteúdo truncado...]"
                     self.manuais[nome_manual] = conteudo
             except Exception as e:
                 print(f"❌ Erro ao carregar {arquivo}: {e}")
@@ -54,85 +57,99 @@ class ManualProcessor:
         print(f"🎉 {len(self.manuais)} manuais carregados!")
     
     def _buscar_manuais_relevantes(self, pergunta: str) -> Dict[str, str]:
-        """Busca manuais relevantes baseado na pergunta"""
-        pergunta_lower = pergunta.lower()
-        manuais_relevantes = {}
+        """Busca manuais relevantes - versão melhorada baseada no local"""
+        print(f"🔍 Buscando por palavras-chave: '{pergunta}'")
         
-        # Palavras-chave para busca
-        palavras_chave = re.findall(r'\b\w+\b', pergunta_lower)
+        pergunta_lower = pergunta.lower()
+        palavras_pergunta = re.findall(r'\b\w+\b', pergunta_lower)
+        palavras_pergunta = [p for p in palavras_pergunta if len(p) > 2]
+        
+        scores = []
         
         for nome_manual, conteudo in self.manuais.items():
             nome_lower = nome_manual.lower()
             conteudo_lower = conteudo.lower()
             
-            # Calcular relevância
             score = 0
             
-            # Busca no nome do arquivo
-            for palavra in palavras_chave:
+            # Busca no nome do arquivo (peso maior)
+            for palavra in palavras_pergunta:
                 if palavra in nome_lower:
                     score += 10
+                
+                # Busca no conteúdo (peso menor)
                 if palavra in conteudo_lower:
                     score += 1
             
-            # Se encontrou alguma relevância, incluir
             if score > 0:
-                manuais_relevantes[nome_manual] = conteudo
+                scores.append((nome_manual, conteudo, score))
         
-        # Ordenar por relevância e pegar os top 3
-        manuais_ordenados = dict(sorted(manuais_relevantes.items(), 
-                                      key=lambda x: sum(palavra in x[1].lower() 
-                                                       for palavra in palavras_chave), 
-                                      reverse=True)[:3])
+        # Ordenar por relevância
+        scores.sort(key=lambda x: x[2], reverse=True)
         
-        return manuais_ordenados
+        # Fallback se não encontrou nada
+        if not scores:
+            print("⚠️ Busca principal falhou, tentando fallback...")
+            for nome_manual, conteudo in self.manuais.items():
+                nome_lower = nome_manual.lower()
+                for palavra in palavras_pergunta:
+                    if any(palavra in pk for pk in nome_lower.split('_')):
+                        scores.append((nome_manual, conteudo, 1))
+                        break
+        
+        # Pegar top 3
+        resultado = {}
+        for nome_manual, conteudo, score in scores[:3]:
+            resultado[nome_manual] = conteudo
+        
+        print(f"✅ Encontrados {len(resultado)} manuais relevantes")
+        return resultado
     
     async def _processar_com_openai(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
-        """Processa a pergunta usando OpenAI v0.28 com GPT-4o-mini"""
+        """Processa a pergunta usando OpenAI v0.28 - CORRIGIDO"""
         print("🚀 Processando com IA...")
         
-        # Preparar contexto dos manuais (usar mais contexto como no original)
+        # Preparar contexto (mais contexto como no local)
         contexto = ""
         for nome, conteudo in manuais_relevantes.items():
-            contexto += f"\n\n=== MANUAL: {nome} ===\n{conteudo[:2000]}"
+            contexto += f"\n\n### {nome} ###\n{conteudo[:4000]}"  # Mais contexto
         
-        # Prompt original adaptado
-        prompt = f"""Você é um especialista técnico em máquinas agrícolas.
-Use apenas o conteúdo dos manuais abaixo para responder à pergunta do usuário.
+        # Prompt melhorado baseado no local
+        prompt = f"""Você é um especialista em máquinas agrícolas.
+
+Use as informações dos manuais abaixo para responder à pergunta de forma técnica e precisa.
+
+MANUAIS CONSULTADOS:
+{contexto}
+
+PERGUNTA: {pergunta}
 
 Instruções:
-- Se a pergunta envolver marcas diferentes, peça educadamente para o usuário perguntar uma por vez.
-- Se a pergunta não tiver relação com máquinas agrícolas, RESPONDA usando seu conhecimento geral,
-  mas explique gentilmente que seu foco é máquinas agrícolas.
-- Se a pergunta mencionar várias máquinas da MESMA marca, responda com todas as informações relevantes.
-- Mantenha um tom profissional e cordial.
-- Cite sempre o nome do manual (APENAS 1 MANUAL) e a seção/subseção usada como base.
-
----
-📘 CONTEXTO:
-{contexto}
----
-🧭 PERGUNTA:
-{pergunta}
-
-RESPOSTA TÉCNICA:"""
+- Responda baseado apenas nas informações fornecidas
+- Cite o manual usado como fonte
+- Seja técnico mas claro
+- Se não houver informação suficiente, diga isso
+- Mantenha tom profissional e cordial
+"""
 
         try:
-            # Usar GPT-4o-mini com OpenAI v0.28
-            response = openai.Completion.create(
-                model="gpt-4o-mini",
-                prompt=prompt,
-                max_tokens=500,
+            # CORREÇÃO: Usar modelo compatível com v0.28
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",  # ← Modelo compatível com v0.28
+                messages=[
+                    {"role": "system", "content": "Você é um especialista em máquinas agrícolas."},
+                    {"role": "user", "content": prompt}
+                ],
                 temperature=0.2,
-                stop=None
+                max_tokens=600
             )
             
-            resposta = response.choices[0].text.strip()
+            resposta = response.choices[0].message.content.strip()
             
             return {
                 "resposta": resposta,
                 "manuais_usados": list(manuais_relevantes.keys()),
-                "modelo_usado": "gpt-4o-mini",
+                "modelo_usado": "gpt-3.5-turbo",
                 "sucesso": True
             }
             
@@ -141,35 +158,69 @@ RESPOSTA TÉCNICA:"""
             raise e
     
     def _processar_offline(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
-        """Fallback: processamento offline"""
+        """Fallback offline melhorado - baseado na versão local"""
         print("🔄 Processando offline...")
         
-        # Buscar informação específica
-        resposta_parts = []
+        # Analisar tipo de pergunta
+        pergunta_lower = pergunta.lower()
         
-        for nome_manual, conteudo in manuais_relevantes.items():
-            linhas = conteudo.split('\n')
-            secoes_relevantes = []
-            
-            for i, linha in enumerate(linhas):
-                if any(palavra.lower() in linha.lower() for palavra in pergunta.split()):
-                    inicio = max(0, i-1)
-                    fim = min(len(linhas), i+2)
-                    secao = '\n'.join(linhas[inicio:fim])
-                    secoes_relevantes.append(secao)
-            
-            if secoes_relevantes:
-                resposta_parts.append(f"## {nome_manual}\n{secoes_relevantes[0]}")
-        
-        if not resposta_parts:
-            resposta_final = "❌ Informação específica não encontrada nos manuais."
+        if any(palavra in pergunta_lower for palavra in ['manutenção', 'manter', 'cuidar', 'preventiva']):
+            tipo_pergunta = "MANUTENÇÃO"
+        elif any(palavra in pergunta_lower for palavra in ['problema', 'defeito', 'erro', 'falha']):
+            tipo_pergunta = "PROBLEMA"
+        elif any(palavra in pergunta_lower for palavra in ['como', 'usar', 'operar', 'funciona']):
+            tipo_pergunta = "OPERAÇÃO"
+        elif any(palavra in pergunta_lower for palavra in ['especificação', 'dados', 'características', 'potência', 'capacidade']):
+            tipo_pergunta = "ESPECIFICAÇÕES"
         else:
-            resposta_final = f"📋 **INFORMAÇÕES ENCONTRADAS:**\n\n" + '\n\n'.join(resposta_parts[:2])
+            tipo_pergunta = "GERAL"
+        
+        resposta = f"📋 **RESPOSTA TÉCNICA - {tipo_pergunta}**\n\n"
+        resposta += f"**Pergunta:** {pergunta}\n\n"
+        
+        # Processar cada manual
+        for i, (nome_manual, conteudo) in enumerate(manuais_relevantes.items(), 1):
+            resposta += f"## {i}. {nome_manual}\n\n"
+            
+            linhas = conteudo.split('\n')
+            info_relevante = []
+            
+            for linha in linhas:
+                linha = linha.strip()
+                if not linha or linha.startswith('#'):
+                    continue
+                
+                linha_lower = linha.lower()
+                
+                # Filtrar por tipo de pergunta
+                if tipo_pergunta == "ESPECIFICAÇÕES" and any(palavra in linha_lower for palavra in ['potência', 'peso', 'dimensões', 'capacidade', 'motor', 'cv', 'hp', 'litros']):
+                    info_relevante.append(f"📊 {linha}")
+                elif tipo_pergunta == "MANUTENÇÃO" and any(palavra in linha_lower for palavra in ['manutenção', 'troca', 'filtro', 'óleo']):
+                    info_relevante.append(f"🔧 {linha}")
+                elif any(palavra in pergunta_lower for palavra in linha_lower.split() if len(palavra) > 3):
+                    info_relevante.append(f"📌 {linha}")
+            
+            # Se não encontrou nada específico, pegar informações gerais
+            if not info_relevante:
+                for linha in linhas[:5]:
+                    linha = linha.strip()
+                    if linha and not linha.startswith('#') and len(linha) > 20:
+                        info_relevante.append(f"📝 {linha}")
+            
+            # Adicionar até 3 informações por manual
+            for info in info_relevante[:3]:
+                resposta += f"{info}\n"
+            
+            resposta += "\n"
+        
+        # Adicionar fonte
+        resposta += f"\n💡 **Manuais consultados:** {', '.join(manuais_relevantes.keys())}\n"
+        resposta += "⚙️ **Modo:** Resposta técnica estruturada\n"
         
         return {
-            "resposta": resposta_final,
+            "resposta": resposta,
             "manuais_usados": list(manuais_relevantes.keys()),
-            "modelo_usado": "busca_offline",
+            "modelo_usado": "busca_offline_inteligente",
             "sucesso": True
         }
     
@@ -183,7 +234,7 @@ RESPOSTA TÉCNICA:"""
         
         if not manuais_relevantes:
             return {
-                "resposta": "❌ Nenhum manual relevante encontrado.",
+                "resposta": f"❌ Não encontrei manuais relevantes para '{pergunta}'. Tente usar palavras-chave como: marca, modelo, ou tipo de problema.",
                 "manuais_usados": [],
                 "sucesso": False
             }
@@ -197,7 +248,7 @@ RESPOSTA TÉCNICA:"""
                 print(f"❌ Erro OpenAI: {e}")
                 print("🔄 Fallback para offline...")
         
-        # Fallback offline
+        # Fallback offline inteligente
         return self._processar_offline(pergunta, manuais_relevantes)
     
     def get_status(self):
@@ -208,6 +259,7 @@ RESPOSTA TÉCNICA:"""
             "openai_disponivel": self.openai_disponivel,
             "manuais_indexados": list(self.manuais.keys())
         }
+
 
 
 
