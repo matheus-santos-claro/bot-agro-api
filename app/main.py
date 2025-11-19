@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any
 import uvicorn
+import os
 from .config import config
 
 # Criar API
@@ -76,7 +77,8 @@ async def fazer_pergunta(request: PerguntaRequest):
     try:
         # Só cria o processador quando alguém faz uma pergunta
         proc = get_processor()
-        resultado = proc.responder_pergunta(request.pergunta)
+        # CORREÇÃO: usar método correto (async)
+        resultado = await proc.processar_pergunta(request.pergunta)
         return RespostaResponse(**resultado)
         
     except Exception as e:
@@ -87,10 +89,17 @@ async def listar_manuais():
     """Lista manuais - inicializa se necessário"""
     try:
         proc = get_processor()
-        status = proc.get_status()
+        # CORREÇÃO: usar método correto se existir
+        if hasattr(proc, 'get_status'):
+            status = proc.get_status()
+        else:
+            status = {
+                "total_manuais": len(proc.manuais),
+                "manuais_indexados": list(proc.manuais.keys())
+            }
         return {
             "total": status["total_manuais"],
-            "amostra": status.get("manuais_indexados", [])[:10]
+            "amostra": status.get("manuais_indexados", list(proc.manuais.keys()))[:10]
         }
     except Exception as e:
         return {"erro": str(e)}
@@ -100,7 +109,14 @@ async def inicializar_manualmente():
     """Endpoint para inicializar o processador manualmente"""
     try:
         proc = get_processor()
-        status = proc.get_status()
+        # CORREÇÃO: usar método correto se existir
+        if hasattr(proc, 'get_status'):
+            status = proc.get_status()
+        else:
+            status = {
+                "total_manuais": len(proc.manuais),
+                "status": "INICIALIZADO"
+            }
         return {
             "message": "✅ Processador inicializado com sucesso!",
             "total_manuais": status["total_manuais"],
@@ -108,6 +124,30 @@ async def inicializar_manualmente():
         }
     except Exception as e:
         return {"erro": f"Falha na inicialização: {str(e)}"}
+
+@app.get("/debug")
+async def debug_sistema():
+    """Endpoint para diagnóstico do sistema"""
+    global processor
+    
+    debug_info = {
+        "openai_key_configurada": bool(config.OPENAI_API_KEY),
+        "openai_key_preview": config.OPENAI_API_KEY[:15] + "..." if config.OPENAI_API_KEY else "Não configurada",
+        "processador_inicializado": processor is not None,
+        "caminho_manuais": config.CAMINHO_MANUAIS,
+        "manuais_existem": os.path.exists(config.CAMINHO_MANUAIS),
+    }
+    
+    if os.path.exists(config.CAMINHO_MANUAIS):
+        arquivos = [f for f in os.listdir(config.CAMINHO_MANUAIS) if f.endswith('.md')]
+        debug_info["total_manuais"] = len(arquivos)
+        debug_info["primeiros_manuais"] = arquivos[:5]
+    
+    if processor is not None:
+        debug_info["manuais_carregados"] = len(processor.manuais)
+        debug_info["primeiros_manuais_carregados"] = list(processor.manuais.keys())[:5]
+    
+    return debug_info
 
 # =====================================================
 # SERVIDOR
@@ -128,24 +168,4 @@ if __name__ == "__main__":
         reload=False,          # False em produção
         log_level="info"
     )
-
-@app.get("/debug")
-async def debug_sistema():
-    """Endpoint para diagnóstico do sistema"""
-    from .config import config
-    
-    debug_info = {
-        "openai_key_configurada": bool(config.OPENAI_API_KEY),
-        "openai_key_preview": config.OPENAI_API_KEY[:15] + "..." if config.OPENAI_API_KEY else "Não configurada",
-        "processador_inicializado": processador_global is not None,
-        "caminho_manuais": config.CAMINHO_MANUAIS,
-        "manuais_existem": os.path.exists(config.CAMINHO_MANUAIS),
-    }
-    
-    if os.path.exists(config.CAMINHO_MANUAIS):
-        arquivos = [f for f in os.listdir(config.CAMINHO_MANUAIS) if f.endswith('.md')]
-        debug_info["total_manuais"] = len(arquivos)
-        debug_info["primeiros_manuais"] = arquivos[:5]
-    
-    return debug_info
 
