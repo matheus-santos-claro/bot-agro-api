@@ -1,68 +1,7 @@
 import os
 import re
 from typing import Dict, List
-from openai import OpenAI
-import asyncio
-
-class ManualProcessor:
-    def __init__(self, caminho_manuais: str, openai_api_key: str):
-        print(f"🔧 Inicializando ManualProcessor...")
-        print(f"📁 Caminho manuais: {caminho_manuais}")
-        print(f"🔑 OpenAI key configurada: {bool(openai_api_key)}")
-        
-        self.caminho_manuais = caminho_manuais
-        self.manuais = {}
-        self.openai_api_key = openai_api_key
-        
-        # Configurar cliente OpenAI v1.x
-        if self.openai_api_key:
-            try:
-                self.client = OpenAI(api_key=self.openai_api_key)
-                print("✅ Cliente OpenAI v1.x inicializado com sucesso")
-                
-            except Exception as e:
-                print(f"❌ Erro ao inicializar OpenAI: {e}")
-                self.client = None
-        else:
-            print("❌ OpenAI API key não fornecida - usando apenas fallback")
-            self.client = None
-        
-        self._carregar_manuais()
-    
-    def _carregar_manuais(self):
-        """Carrega todos os manuais da pasta especificada"""
-        print(f"📚 Carregando manuais de: {self.caminho_manuais}")
-        
-        if not os.path.exists(self.caminho_manuais):
-            print(f"❌ Pasta de manuais não encontrada: {self.caminho_manuais}")
-            return
-        
-        arquivos_md = [f for f in os.listdir(self.caminho_manuais) if f.endswith('.md')]
-        print(f"📋 Encontrados {len(arquivos_md)} arquivos .md")
-        
-        for arquivo in arquivos_md:
-            nome_manual = arquivo.replace('.md', '')
-            caminho_arquivo = os.path.join(self.caminho_manuais, arquivo)
-            
-            try:
-                with open(caminho_arquivo, 'r', encoding='utf-8') as f:
-                    conteudo = f.read()
-                    self.manuais[nome_manual] = conteudo
-                    print(f"  ✅ {nome_manual}")
-            except Exception as e:
-                print(f"  ❌ Erro ao carregar {arquivo}: {e}")
-        
-        print(f"🎉 Total de {len(self.manuais)} manuais carregados com sucesso!")
-    
-    def _buscar_manuais_relevantes(self, pergunta: str) -> Dict[str, str]:
-        """Busca manuais relevantes baseado na pergunta"""
-        pergunta_lower = pergunta.lower()
-        manuais_relevantes = {}
-        
-        # Palavras-chave para buscaimport os
-import re
-from typing import Dict, List
-from openai import OpenAI
+import openai
 import asyncio
 
 class ManualProcessor:
@@ -74,18 +13,19 @@ class ManualProcessor:
         self.manuais = {}
         self.openai_api_key = openai_api_key
         
-        # Configurar cliente OpenAI v1.x
+        # Configurar OpenAI v0.28
         if self.openai_api_key:
             try:
-                self.client = OpenAI(api_key=self.openai_api_key)
-                print("✅ Cliente OpenAI v1.x inicializado")
+                openai.api_key = self.openai_api_key
+                print("✅ Cliente OpenAI v0.28 inicializado")
+                self.openai_disponivel = True
                 
             except Exception as e:
                 print(f"❌ Erro OpenAI: {e}")
-                self.client = None
+                self.openai_disponivel = False
         else:
             print("❌ OpenAI key não fornecida")
-            self.client = None
+            self.openai_disponivel = False
         
         self._carregar_manuais()
     
@@ -148,8 +88,8 @@ class ManualProcessor:
         return manuais_ordenados
     
     async def _processar_com_openai(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
-        """Processa a pergunta usando OpenAI v1.x"""
-        print("🚀 Processando com OpenAI v1.x...")
+        """Processa a pergunta usando OpenAI v0.28"""
+        print("🚀 Processando com IA...")
         
         # Preparar contexto dos manuais (limitado)
         contexto_manuais = ""
@@ -157,7 +97,7 @@ class ManualProcessor:
             contexto_manuais += f"\n\n=== {nome} ===\n{conteudo[:1500]}"
         
         # Prompt otimizado
-        prompt = f"""Você é um especialista em máquinas agrícolas John Deere. 
+        prompt = f"""Você é um especialista em máquinas agrícolas John Deere, Case IH, New Holland e Valtra. 
 
 PERGUNTA: {pergunta}
 
@@ -170,32 +110,31 @@ INSTRUÇÕES:
 - Seja específico sobre o modelo mencionado
 - Use emojis para destacar pontos importantes
 - Máximo 150 palavras
+- Foque nas especificações técnicas solicitadas
 
 RESPOSTA:"""
 
         try:
-            # Nova sintaxe OpenAI v1.x
-            response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "Você é um especialista em máquinas agrícolas."},
-                    {"role": "user", "content": prompt}
-                ],
+            # Sintaxe OpenAI v0.28
+            response = openai.Completion.create(
+                engine="gpt-3.5-turbo-instruct",
+                prompt=prompt,
                 max_tokens=400,
-                temperature=0.3
+                temperature=0.3,
+                stop=None
             )
             
-            resposta = response.choices[0].message.content
+            resposta = response.choices[0].text.strip()
             
             return {
                 "resposta": resposta,
                 "manuais_usados": list(manuais_relevantes.keys()),
-                "modelo_usado": "gpt-4o-mini",
+                "modelo_usado": "gpt-3.5-turbo-instruct",
                 "sucesso": True
             }
             
         except Exception as e:
-            print(f"❌ Erro OpenAI v1.x: {e}")
+            print(f"❌ Erro OpenAI v0.28: {e}")
             raise e
     
     def _processar_offline(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
@@ -247,7 +186,7 @@ RESPOSTA:"""
             }
         
         # Tentar OpenAI primeiro
-        if self.client:
+        if self.openai_disponivel:
             try:
                 return await self._processar_com_openai(pergunta, manuais_relevantes)
                 
@@ -257,4 +196,14 @@ RESPOSTA:"""
         
         # Fallback offline
         return self._processar_offline(pergunta, manuais_relevantes)
+    
+    def get_status(self):
+        """Retorna status do processador"""
+        return {
+            "status": "INICIALIZADO",
+            "total_manuais": len(self.manuais),
+            "openai_disponivel": self.openai_disponivel,
+            "manuais_indexados": list(self.manuais.keys())
+        }
+
 
