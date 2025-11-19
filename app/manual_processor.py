@@ -88,17 +88,16 @@ class ManualProcessor:
         return manuais_ordenados
     
     async def _processar_com_openai(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
-    """Processa a pergunta usando OpenAI v0.28 com GPT-4o-mini"""
-    print("🚀 Processando com IA...")
-    
-    # Preparar contexto dos manuais (usar mais contexto como no original)
-    contexto = ""
-    for nome, conteudo in manuais_relevantes.items():
-        contexto += f"\n\n=== MANUAL: {nome} ===\n{conteudo[:2000]}"  # Mais contexto
-    
-    # Prompt original adaptado
-    prompt = f"""
-Você é um especialista técnico em máquinas agrícolas.
+        """Processa a pergunta usando OpenAI v0.28 com GPT-4o-mini"""
+        print("🚀 Processando com IA...")
+        
+        # Preparar contexto dos manuais (usar mais contexto como no original)
+        contexto = ""
+        for nome, conteudo in manuais_relevantes.items():
+            contexto += f"\n\n=== MANUAL: {nome} ===\n{conteudo[:2000]}"
+        
+        # Prompt original adaptado
+        prompt = f"""Você é um especialista técnico em máquinas agrícolas.
 Use apenas o conteúdo dos manuais abaixo para responder à pergunta do usuário.
 
 Instruções:
@@ -118,28 +117,28 @@ Instruções:
 
 RESPOSTA TÉCNICA:"""
 
-    try:
-        # Usar ChatCompletion com OpenAI v0.28 (simula chat com completion)
-        response = openai.Completion.create(
-            model="gpt-4o-mini",  # Usar GPT-4o-mini
-            prompt=prompt,
-            max_tokens=500,       # Mais tokens para respostas completas
-            temperature=0.2,      # Mesma temperatura do original
-            stop=None
-        )
-        
-        resposta = response.choices[0].text.strip()
-        
-        return {
-            "resposta": resposta,
-            "manuais_usados": list(manuais_relevantes.keys()),
-            "modelo_usado": "gpt-4o-mini",
-            "sucesso": True
-        }
-        
-    except Exception as e:
-        print(f"❌ Erro OpenAI v0.28: {e}")
-        raise e
+        try:
+            # Usar GPT-4o-mini com OpenAI v0.28
+            response = openai.Completion.create(
+                model="gpt-4o-mini",
+                prompt=prompt,
+                max_tokens=500,
+                temperature=0.2,
+                stop=None
+            )
+            
+            resposta = response.choices[0].text.strip()
+            
+            return {
+                "resposta": resposta,
+                "manuais_usados": list(manuais_relevantes.keys()),
+                "modelo_usado": "gpt-4o-mini",
+                "sucesso": True
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro OpenAI v0.28: {e}")
+            raise e
     
     def _processar_offline(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
         """Fallback: processamento offline"""
