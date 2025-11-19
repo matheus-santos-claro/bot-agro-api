@@ -88,54 +88,58 @@ class ManualProcessor:
         return manuais_ordenados
     
     async def _processar_com_openai(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
-        """Processa a pergunta usando OpenAI v0.28"""
-        print("🚀 Processando com IA...")
+    """Processa a pergunta usando OpenAI v0.28 com GPT-4o-mini"""
+    print("🚀 Processando com IA...")
+    
+    # Preparar contexto dos manuais (usar mais contexto como no original)
+    contexto = ""
+    for nome, conteudo in manuais_relevantes.items():
+        contexto += f"\n\n=== MANUAL: {nome} ===\n{conteudo[:2000]}"  # Mais contexto
+    
+    # Prompt original adaptado
+    prompt = f"""
+Você é um especialista técnico em máquinas agrícolas.
+Use apenas o conteúdo dos manuais abaixo para responder à pergunta do usuário.
+
+Instruções:
+- Se a pergunta envolver marcas diferentes, peça educadamente para o usuário perguntar uma por vez.
+- Se a pergunta não tiver relação com máquinas agrícolas, RESPONDA usando seu conhecimento geral,
+  mas explique gentilmente que seu foco é máquinas agrícolas.
+- Se a pergunta mencionar várias máquinas da MESMA marca, responda com todas as informações relevantes.
+- Mantenha um tom profissional e cordial.
+- Cite sempre o nome do manual (APENAS 1 MANUAL) e a seção/subseção usada como base.
+
+---
+📘 CONTEXTO:
+{contexto}
+---
+🧭 PERGUNTA:
+{pergunta}
+
+RESPOSTA TÉCNICA:"""
+
+    try:
+        # Usar ChatCompletion com OpenAI v0.28 (simula chat com completion)
+        response = openai.Completion.create(
+            model="gpt-4o-mini",  # Usar GPT-4o-mini
+            prompt=prompt,
+            max_tokens=500,       # Mais tokens para respostas completas
+            temperature=0.2,      # Mesma temperatura do original
+            stop=None
+        )
         
-        # Preparar contexto dos manuais (limitado)
-        contexto_manuais = ""
-        for nome, conteudo in manuais_relevantes.items():
-            contexto_manuais += f"\n\n=== {nome} ===\n{conteudo[:1500]}"
+        resposta = response.choices[0].text.strip()
         
-        # Prompt otimizado
-        prompt = f"""Você é um especialista em máquinas agrícolas John Deere, Case IH, New Holland e Valtra. 
-
-PERGUNTA: {pergunta}
-
-MANUAIS DISPONÍVEIS:
-{contexto_manuais}
-
-INSTRUÇÕES:
-- Responda de forma CONCISA e DIRETA
-- Use apenas informações dos manuais fornecidos
-- Seja específico sobre o modelo mencionado
-- Use emojis para destacar pontos importantes
-- Máximo 150 palavras
-- Foque nas especificações técnicas solicitadas
-
-RESPOSTA:"""
-
-        try:
-            # Sintaxe OpenAI v0.28
-            response = openai.Completion.create(
-                engine="gpt-3.5-turbo-instruct",
-                prompt=prompt,
-                max_tokens=400,
-                temperature=0.3,
-                stop=None
-            )
-            
-            resposta = response.choices[0].text.strip()
-            
-            return {
-                "resposta": resposta,
-                "manuais_usados": list(manuais_relevantes.keys()),
-                "modelo_usado": "gpt-3.5-turbo-instruct",
-                "sucesso": True
-            }
-            
-        except Exception as e:
-            print(f"❌ Erro OpenAI v0.28: {e}")
-            raise e
+        return {
+            "resposta": resposta,
+            "manuais_usados": list(manuais_relevantes.keys()),
+            "modelo_usado": "gpt-4o-mini",
+            "sucesso": True
+        }
+        
+    except Exception as e:
+        print(f"❌ Erro OpenAI v0.28: {e}")
+        raise e
     
     def _processar_offline(self, pergunta: str, manuais_relevantes: Dict[str, str]) -> dict:
         """Fallback: processamento offline"""
@@ -205,5 +209,6 @@ RESPOSTA:"""
             "openai_disponivel": self.openai_disponivel,
             "manuais_indexados": list(self.manuais.keys())
         }
+
 
 
